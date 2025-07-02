@@ -1,0 +1,56 @@
+# Fichiers Python compilés
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Environnements virtuels
+venv/
+env/
+ENV/
+
+# Fichiers environnement et sécurité
+.env
+.token
+*.token
+*.pem
+*.key
+
+# Logs et bases de données
+*.log
+*.sqlite3
+*.db
+
+# Fichiers système
+.DS_Store
+Thumbs.db
+
+# Fichiers éditeurs
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Tests et coverage
+.coverage
+htmlcov/
+.pytest_cache/
+.tox/
+nosetests.xml
+coverage.xml
