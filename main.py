@@ -9,7 +9,7 @@ puis redistribuées localement par le propriétaire de l'application
 import os
 import json
 import time
-from typing import List, Optional, Dict, Any, Union
+from typing import Optional, List, Dict, Any, Union
 from datetime import datetime
 from enum import Enum
 
@@ -63,7 +63,7 @@ app = FastAPI(
     },
     openapi_tags=[
         {
-            "name": "Général",
+            "name": "General",
             "description": "Opérations générales et statut de l'API"
         },
         {
@@ -71,12 +71,32 @@ app = FastAPI(
             "description": "Opérations liées à l'authentification avec CJDropshipping"
         },
         {
+            "name": "Categories",
+            "description": "Consultation des catégories de produits disponibles"
+        },
+        {
             "name": "Produits",
-            "description": "Recherche et informations sur les produits du catalogue"
+            "description": "Recherche et informations détaillées sur les produits du catalogue"
+        },
+        {
+            "name": "Variantes",
+            "description": "Gestion et consultation des variantes de produits"
+        },
+        {
+            "name": "Inventaire",
+            "description": "Vérification de la disponibilité des produits et des stocks"
+        },
+        {
+            "name": "Avis",
+            "description": "Consultation des avis et évaluations sur les produits"
         },
         {
             "name": "Commandes",
-            "description": "Création et gestion des commandes"
+            "description": "Création et gestion des commandes client"
+        },
+        {
+            "name": "Paiement",
+            "description": "Gestion des paiements et du solde du compte"
         },
         {
             "name": "Logistique",
@@ -88,7 +108,7 @@ app = FastAPI(
         },
         {
             "name": "Compte",
-            "description": "Informations sur le compte et gestion du solde"
+            "description": "Informations sur le compte et paramètres"
         },
     ],
     docs_url="/docs",
@@ -113,15 +133,311 @@ load_dotenv()
 
 # Adresse de livraison centralisée au Burkina Faso depuis les variables d'environnement
 DEFAULT_SHIPPING_INFO = {
-    "shippingZip": os.getenv("SHIPPING_ZIP", "10000"),  # Code postal d'Ouagadougou
-    "shippingCountryCode": os.getenv("SHIPPING_COUNTRY_CODE", "BF"),  # Code pays du Burkina Faso
-    "shippingCountry": os.getenv("SHIPPING_COUNTRY", "Burkina Faso"),
-    "shippingProvince": os.getenv("SHIPPING_PROVINCE", "Kadiogo"),
-    "shippingCity": os.getenv("SHIPPING_CITY", "Ouagadougou"),
+    "shippingZip": os.getenv("SHIPPING_ZIP"),  # Code postal d'Ouagadougou
+    "shippingCountryCode": os.getenv("SHIPPING_COUNTRY_CODE"),  # Code pays du Burkina Faso
+    "shippingCountry": os.getenv("SHIPPING_COUNTRY"),
+    "shippingProvince": os.getenv("SHIPPING_PROVINCE"),
+    "shippingCity": os.getenv("SHIPPING_CITY"),
     "shippingAddress": os.getenv("SHIPPING_ADDRESS"),
     "shippingCustomerName": os.getenv("SHIPPING_CUSTOMER_NAME"),
     "shippingPhone": os.getenv("SHIPPING_PHONE")
 }
+
+# Modèle pour les résultats de recherche de produits
+class ProductSearchResponse(BaseModel):
+    """Réponse pour la recherche de produits"""
+    products: List[Dict[str, Any]] = Field(..., description="Liste des produits correspondants")
+    total: int = Field(..., description="Nombre total de produits disponibles")
+    page: int = Field(..., description="Page actuelle")
+    page_size: int = Field(..., description="Nombre d'éléments par page")
+    
+    class Config:
+        schema_extra = {
+            "example": {
+                "products": [
+                    {
+                        "pid": "2507020928431604700",
+                        "productNameEn": "Solar Garden Light",
+                        "productSku": "SKU12345",
+                        "productImage": "https://example.com/image.jpg",
+                        "categoryId": "123456",
+                        "price": 12.99
+                    }
+                ],
+                "total": 120,
+                "page": 1,
+                "page_size": 10
+            }
+        }
+
+# ====== ENDPOINTS POUR LES CATÉGORIES ======
+
+@app.get(
+    "/categories",
+    response_model=Dict[str, Any],
+    summary="Liste des catégories de produits",
+    description="Récupère la liste complète des catégories de produits disponibles chez CJDropshipping.",
+    response_description="Liste des catégories avec leurs identifiants et noms",
+    responses={
+        200: {
+            "description": "Liste des catégories récupérée avec succès"
+        },
+        401: {
+            "description": "Erreur d'authentification avec l'API CJDropshipping"
+        },
+        500: {
+            "description": "Erreur du serveur lors de la récupération des catégories"
+        }
+    },
+    tags=["Categories"],
+    operation_id="get_product_categories"
+)
+async def get_categories():
+    """Récupère la liste complète des catégories de produits.
+    
+    Returns:
+        dict: Réponse standardisée contenant la liste des catégories
+    """
+    try:
+        response = cj_client.get_categories()
+        
+        # Retourner la réponse standardisée
+        if response.get("code") == 200 and response.get("result"):
+            return response
+        else:
+            raise HTTPException(
+                status_code=response.get("code", 500),
+                detail=f"Erreur lors de la récupération des catégories: {response.get('message', 'Erreur inconnue')}"
+            )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erreur lors de la récupération des catégories: {str(e)}"
+        )
+
+@app.get(
+    "/products/category/{category_id}",
+    summary="Produits par catégorie",
+    description="Recherche des produits par catégorie dans le catalogue CJDropshipping.",
+    response_description="Liste paginée des produits de la catégorie spécifiée",
+    responses={
+        200: {
+            "description": "Liste des produits récupérée avec succès"
+        },
+        400: {
+            "description": "Paramètres de requête invalides"
+        },
+        401: {
+            "description": "Erreur d'authentification avec l'API CJDropshipping"
+        },
+        500: {
+            "description": "Erreur du serveur lors de la recherche de produits"
+        }
+    },
+    tags=["Produits"]
+)
+async def get_products_by_category(
+    category_id: str = Path(..., description="Identifiant de la catégorie", examples=["123456"]),
+    page: int = Query(1, ge=1, description="Numéro de la page (1-indexé)", examples=[1]),
+    page_size: int = Query(10, ge=10, le=100, description="Nombre d'éléments par page (minimum 10)", examples=[10])
+):
+    """
+    Recherche des produits par catégorie dans le catalogue CJDropshipping
+    
+    Args:
+        category_id (str): Identifiant de la catégorie à filtrer
+        page (int): Numéro de page (1-indexé)
+        page_size (int): Nombre d'éléments par page (minimum 10)
+        
+    Returns:
+        dict: Réponse standardisée contenant les résultats de recherche paginés
+    """
+    try:
+        response = cj_client.get_product_list(
+            page_num=page,
+            page_size=page_size,
+            categoryId=category_id
+        )
+        
+        # Retourner la réponse standardisée
+        if response.get("code") == 200 and response.get("result"):
+            return response
+        else:
+            raise HTTPException(
+                status_code=response.get("code", 500),
+                detail=f"Erreur lors de la recherche de produits: {response.get('message', 'Erreur inconnue')}"
+            )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erreur lors de la recherche de produits: {str(e)}"
+        )
+
+# Enums pour les options standards
+# ====== ENDPOINTS POUR LES VARIANTES DE PRODUITS ======
+
+@app.get(
+    "/products/{product_id}/variants",
+    summary="Variantes d'un produit",
+    description="Récupère toutes les variantes disponibles pour un produit spécifique.",
+    response_description="Liste des variantes du produit avec leurs attributs",
+    responses={
+        200: {
+            "description": "Variantes récupérées avec succès"
+        },
+        400: {
+            "description": "ID de produit invalide"
+        },
+        401: {
+            "description": "Erreur d'authentification avec l'API CJDropshipping"
+        },
+        404: {
+            "description": "Produit non trouvé"
+        },
+        500: {
+            "description": "Erreur du serveur lors de la récupération des variantes"
+        }
+    },
+    tags=["Variantes"]
+)
+async def get_product_variants(product_id: str = Path(..., description="ID du produit", examples=["1234567890"])):
+    """
+    Récupère toutes les variantes disponibles pour un produit spécifique.
+    
+    Args:
+        product_id (str): Identifiant unique du produit
+    
+    Returns:
+        dict: Réponse standardisée contenant la liste des variantes
+    """
+    try:
+        response = cj_client.get_product_variants(product_id)
+        
+        # Retourner la réponse standardisée
+        if response.get("code") == 200 and response.get("result"):
+            return response
+        else:
+            raise HTTPException(
+                status_code=response.get("code", 500),
+                detail=f"Erreur lors de la récupération des variantes: {response.get('message', 'Erreur inconnue')}"
+            )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erreur lors de la récupération des variantes: {str(e)}"
+        )
+
+# ====== ENDPOINTS POUR L'INVENTAIRE ======
+
+@app.get(
+    "/inventory/check/{variant_id}",
+    summary="Vérification du stock",
+    description="Vérifie la disponibilité en stock d'une variante de produit spécifique.",
+    response_description="Informations sur le stock de la variante",
+    responses={
+        200: {
+            "description": "Informations de stock récupérées avec succès"
+        },
+        400: {
+            "description": "ID de variante invalide"
+        },
+        401: {
+            "description": "Erreur d'authentification avec l'API CJDropshipping"
+        },
+        404: {
+            "description": "Variante non trouvée"
+        },
+        500: {
+            "description": "Erreur du serveur lors de la vérification du stock"
+        }
+    },
+    tags=["Inventaire"]
+)
+async def check_inventory(variant_id: str = Path(..., description="ID de la variante", examples=["V-1234567890"])):
+    """
+    Vérifie la disponibilité en stock d'une variante de produit spécifique.
+    
+    Args:
+        variant_id (str): Identifiant unique de la variante
+    
+    Returns:
+        dict: Réponse standardisée contenant les informations de stock
+    """
+    try:
+        response = cj_client.check_inventory(variant_id)
+        
+        # Retourner la réponse standardisée
+        if response.get("code") == 200 and response.get("result"):
+            return response
+        else:
+            raise HTTPException(
+                status_code=response.get("code", 500),
+                detail=f"Erreur lors de la vérification du stock: {response.get('message', 'Erreur inconnue')}"
+            )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erreur lors de la vérification du stock: {str(e)}"
+        )
+
+# ====== ENDPOINTS POUR LES AVIS ======
+
+@app.get(
+    "/reviews/{product_id}",
+    summary="Avis sur un produit",
+    description="Récupère les avis clients pour un produit spécifique.",
+    response_description="Liste paginée des avis clients",
+    responses={
+        200: {
+            "description": "Avis récupérés avec succès"
+        },
+        400: {
+            "description": "ID de produit invalide"
+        },
+        401: {
+            "description": "Erreur d'authentification avec l'API CJDropshipping"
+        },
+        404: {
+            "description": "Produit non trouvé ou aucun avis disponible"
+        },
+        500: {
+            "description": "Erreur du serveur lors de la récupération des avis"
+        }
+    },
+    tags=["Avis"]
+)
+async def get_product_reviews(
+    product_id: str = Path(..., description="ID du produit", examples=["1234567890"]),
+    page: int = Query(1, ge=1, description="Numéro de la page", examples=[1]),
+    page_size: int = Query(10, ge=1, le=50, description="Nombre d'avis par page", examples=[10])
+):
+    """
+    Récupère les avis clients pour un produit spécifique.
+    
+    Args:
+        product_id (str): Identifiant unique du produit
+        page (int): Numéro de la page (1-indexé)
+        page_size (int): Nombre d'avis par page
+    
+    Returns:
+        dict: Réponse standardisée contenant la liste des avis clients
+    """
+    try:
+        response = cj_client.get_product_reviews(product_id, page, page_size)
+        
+        # Retourner la réponse standardisée
+        if response.get("code") == 200 and response.get("result"):
+            return response
+        else:
+            raise HTTPException(
+                status_code=response.get("code", 500),
+                detail=f"Erreur lors de la récupération des avis: {response.get('message', 'Erreur inconnue')}"
+            )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erreur lors de la récupération des avis: {str(e)}"
+        )
 
 # Enums pour les options standards
 class OrderStatus(str, Enum):
@@ -147,16 +463,18 @@ class LogisticService(str, Enum):
 # Modèles de base avec documentation et validation
 
 class APIResponse(BaseModel):
-    """Modèle de réponse standard de l'API"""
-    success: bool = Field(..., description="Indique si la requête a réussi")
+    """Modèle de réponse standard conforme à l'API CJDropshipping"""
+    result: bool = Field(..., description="Indique si la requête a réussi")
+    code: int = Field(..., description="Code de statut de la réponse")
     message: str = Field(..., description="Message informatif sur le résultat")
-    data: Optional[Dict[str, Any]] = Field(None, description="Données retournées par l'API")
+    data: Optional[Any] = Field(None, description="Données retournées par l'API")
 
     class Config:
         schema_extra = {
             "example": {
-                "success": True,
-                "message": "Opération réussie",
+                "result": True,
+                "code": 200,
+                "message": "success",
                 "data": {"id": "123456", "name": "Example"}
             }
         }
@@ -197,6 +515,8 @@ class OrderProduct(BaseModel):
                 "quantity": 2
             }
         }
+
+
 
 class ShippingInfo(BaseModel):
     """Informations d'expédition pour le client final"""
@@ -279,7 +599,7 @@ class OrderResponse(BaseModel):
 
 # Routes de l'API
 
-@app.get("/", 
+@app.get("/", tags=["General"],
     response_model=APIResponse,
     summary="Informations sur l'API",
     description="Point d'entrée racine qui retourne les informations de base sur l'API",
@@ -355,7 +675,7 @@ async def auth_status():
     except Exception as e:
         return {"authenticated": False, "message": f"Erreur: {str(e)}"}
 
-@app.post("/auth/refresh")
+@app.post("/auth/refresh", tags=["Authentification"])
 async def refresh_auth():
     """Force le rafraîchissement du token d'authentification"""
     try:
@@ -412,10 +732,10 @@ class ProductSearchResponse(BaseModel):
     tags=["Produits"]
 )
 async def search_products(
-    keywords: Optional[str] = Query(None, description="Mots-clés pour la recherche", example="solar light"),
-    category_id: Optional[str] = Query(None, description="Identifiant de la catégorie", example="123456"),
-    page: int = Query(1, ge=1, description="Numéro de la page (1-indexé)", example=1),
-    page_size: int = Query(10, ge=10, le=100, description="Nombre d'éléments par page (minimum 10)", example=10)
+    keywords: Optional[str] = Query(None, description="Mots-clés pour la recherche", examples=["solar light"]),
+    category_id: Optional[str] = Query(None, description="Identifiant de la catégorie", examples=["123456"]),
+    page: int = Query(1, ge=1, description="Numéro de la page (1-indexé)", examples=[1]),
+    page_size: int = Query(10, ge=10, le=100, description="Nombre d'éléments par page (minimum 10)", examples=[10])
 ):
     """Recherche des produits dans le catalogue CJDropshipping.
     
@@ -492,7 +812,7 @@ async def search_products_post(search_params: ProductSearchParams):
         page_size=search_params.page_size
     )
 
-@app.get("/products/{pid}")
+@app.get("/products/{pid}", tags=["Produits"])
 async def get_product(pid: str):
     """Récupère les détails d'un produit"""
     try:
@@ -508,7 +828,7 @@ async def get_product(pid: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erreur: {str(e)}")
 
-@app.get("/categories")
+@app.get("/categories", tags=["Categories"])
 async def get_categories():
     """Récupère la liste des catégories de produits"""
     try:
@@ -525,7 +845,7 @@ async def get_categories():
         raise HTTPException(status_code=500, detail=f"Erreur: {str(e)}")
 
 
-@app.get("/products/{pid}/variants")
+@app.get("/products/{pid}/variants", tags=["Variantes"])
 async def get_product_variants(pid: str):
     """Récupère les variantes d'un produit"""
     try:
@@ -541,7 +861,7 @@ async def get_product_variants(pid: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erreur: {str(e)}")
 
-@app.get("/variants/{vid}")
+@app.get("/variants/{vid}", tags=["Variantes"])
 async def get_variant(vid: str):
     """Récupère les détails d'une variante"""
     try:
@@ -557,7 +877,7 @@ async def get_variant(vid: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erreur: {str(e)}")
 
-@app.get("/variants/{vid}/inventory")
+@app.get("/variants/{vid}/inventory", tags=["Inventaire"])
 async def get_variant_inventory(vid: str):
     """Récupère l'inventaire d'une variante"""
     try:
@@ -724,7 +1044,7 @@ async def create_order(order_request: CreateOrderRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erreur lors de la création de la commande: {str(e)}")
 
-@app.get("/orders")
+@app.get("/orders", tags=["Commandes"])
 async def get_orders(page: int = 1, status: Optional[str] = None):
     """Récupère la liste des commandes"""
     try:
@@ -740,7 +1060,7 @@ async def get_orders(page: int = 1, status: Optional[str] = None):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erreur: {str(e)}")
 
-@app.get("/orders/{order_id}")
+@app.get("/orders/{order_id}", tags=["Commandes"])
 async def get_order_details(order_id: str):
     """Récupère les détails d'une commande"""
     try:
@@ -756,7 +1076,7 @@ async def get_order_details(order_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erreur: {str(e)}")
 
-@app.delete("/orders/{order_id}")
+@app.delete("/orders/{order_id}", tags=["Commandes"])
 async def delete_order(order_id: str):
     """Supprime une commande"""
     try:
@@ -814,7 +1134,7 @@ class TrackingResponse(BaseModel):
     },
     tags=["Suivi"]
 )
-async def get_tracking_info(tracking_number: str = Path(..., description="Numéro de suivi de l'expédition", example="CJ12345678CN")):
+async def get_tracking_info(tracking_number: str = Path(..., description="Numéro de suivi de l'expédition", examples=["CJ12345678CN"])):
     """Récupère les informations de suivi pour un numéro de tracking.
     
     Cette API permet de suivre l'évolution d'une expédition depuis la Chine jusqu'au Burkina Faso.

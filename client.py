@@ -118,23 +118,72 @@ class CJDropshippingClient:
     
     def get_product_list(self, page_num=1, page_size=20, **kwargs):
         """
-        Récupère la liste des produits
+        Récupère une liste de produits avec filtres optionnels
         
         Args:
-            page_num (int): Numéro de page
+            page_num (int): Numéro de page (1-indexé)
             page_size (int): Nombre d'éléments par page
-            **kwargs: Filtres supplémentaires (categoryId, productName, etc.)
+            **kwargs: Filtres additionnels (categoryId, productSku, etc.)
             
         Returns:
-            dict: Liste des produits
+            dict: Résultats de recherche paginés
         """
+        endpoint = "/product/list"
         params = {
             "pageNum": page_num,
-            "pageSize": page_size,
-            **kwargs
+            "pageSize": page_size
         }
+        params.update(kwargs)
+        return self._make_request("GET", endpoint, params=params)
         
-        return self._make_request("GET", "/product/list", params=params)
+    def get_product_variants(self, product_id):
+        """
+        Récupère les variantes d'un produit spécifique par son ID
+        
+        Args:
+            product_id (str): ID du produit dont on veut récupérer les variantes
+            
+        Returns:
+            dict: Réponse contenant les variantes du produit
+        """
+        # Utiliser l'endpoint correc avec des paramètres de requête
+        endpoint = "/product/variant/query"
+        params = {"pid": product_id}
+        return self._make_request("GET", endpoint, params=params)
+
+
+    
+    def check_inventory(self, variant_id):
+        """
+        Vérifie la disponibilité en stock d'une variante spécifique
+        
+        Args:
+            variant_id (str): ID de la variante à vérifier
+            
+        Returns:
+            dict: Réponse contenant les informations de stock
+        """
+        params = {"vid": variant_id}
+        return self._make_request("GET", "/product/stock/queryByVid", params=params)
+    
+    def get_product_reviews(self, product_id, page=1, page_size=10):
+        """
+        Récupère les avis clients pour un produit spécifique
+        
+        Args:
+            product_id (str): ID du produit dont on veut récupérer les avis
+            page (int, optional): Numéro de page. Par défaut à 1.
+            page_size (int, optional): Nombre d'avis par page. Par défaut à 10.
+            
+        Returns:
+            dict: Réponse contenant les avis sur le produit
+        """
+        endpoint = f"/product/comments/{product_id}"
+        params = {
+            "page": page,
+            "pageSize": page_size
+        }
+        return self._make_request("GET", endpoint, params=params)
     
     def get_product_details(self, pid=None, product_sku=None, variant_sku=None):
         """
