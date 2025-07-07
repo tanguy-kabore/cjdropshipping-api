@@ -615,7 +615,8 @@ async def root():
     Utile pour vérifier si l'API est en ligne et fonctionnelle.
     """
     return {
-        "success": True,
+        "result": True,
+        "code": 200,
         "message": "API CJDropshipping Burkina Faso opérationnelle",
         "data": {
             "name": "CJDropshipping Burkina Faso API",
@@ -686,7 +687,7 @@ async def refresh_auth():
         if not token_data:
             raise HTTPException(status_code=401, detail="Échec de l'authentification")
             
-        return {"success": True, "message": "Token rafraîchi avec succès"}
+        return {"result": True, "code": 200, "message": "Token rafraîchi avec succès"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erreur lors du rafraîchissement: {str(e)}")
 
@@ -1223,4 +1224,10 @@ async def get_account_balance():
 # Lancement du serveur avec Uvicorn (pour le développement)
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("api_v1:app", host="0.0.0.0", port=8000, reload=True)
+    import os
+    
+    # Récupérer le PORT depuis la variable d'environnement de Render ou utiliser 8000 par défaut
+    port = int(os.environ.get("PORT", 8000))
+    
+    # S'assurer que le nom du module est correct (main:app au lieu de api_v1:app)
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)
