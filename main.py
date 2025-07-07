@@ -6,6 +6,9 @@ Modèle de distribution centralisée: toutes les commandes sont livrées à une 
 puis redistribuées localement par le propriétaire de l'application
 """
 
+# Importer le patch Pydantic pour la compatibilité avec Python 3.12/3.13
+import pydantic_patch
+
 import os
 import json
 import time

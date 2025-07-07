@@ -46,7 +46,7 @@ Thumbs.db
 .vscode/
 *.swp
 *.swo
-
+.code-workspace
 # Tests et coverage
 .coverage
 htmlcov/
